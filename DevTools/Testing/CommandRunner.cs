@@ -3,12 +3,19 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using DevTools.Testing;
+using UnityEngine;
 using Verse;
 
 namespace DevTools;
 
 internal static class CommandRunner
 {
+  /// <summary>
+  /// Exit code for a command-line run with nothing to run. A run that finishes exits with 0, or 1
+  /// when a test failed.
+  /// </summary>
+  public const int NothingToRunExitCode = 2;
+
   public static Result ExecuteCommandLineArgs(ModContentPack mod)
   {
     const string PackageIdArg = "--pid";
@@ -99,9 +106,13 @@ internal static class CommandRunner
           break;
       }
     }
-    if (!result.packageId.EqualsIgnoreCase(mod.PackageIdPlayerFacing))
+    if (result.packageId == null)
       return null;
 
+    if (!result.packageId.EqualsIgnoreCase(mod.PackageIdPlayerFacing))
+      return result;
+
+    result.mod = mod;
     ITestManager testManager = type switch
     {
       ManagerType.Unit => DevHarmony.GetDevTool<TestFixtureManager>(mod),
@@ -109,6 +120,22 @@ internal static class CommandRunner
       ManagerType.Plan => DevHarmony.GetDevTool<TestPlanManager>(mod),
       _ => throw new NotImplementedException(type.ToString())
     };
+    if (testManager == null)
+    {
+      string tests = type switch
+      {
+        ManagerType.Smoke => "smoke tests",
+        ManagerType.Plan => "test plans",
+        _ => "unit tests"
+      };
+      NothingToRun(result, $"{mod.PackageIdPlayerFacing} has no {tests}.");
+      return result;
+    }
+    if (selection == TestSelection.Filter && result.Filter == null)
+    {
+      NothingToRun(result, result.FilterError ?? $"{RunPlanArg} needs the name of a plan.");
+      return result;
+    }
 
     TestRunner testRunner = selection switch
     {
@@ -130,6 +157,20 @@ internal static class CommandRunner
     return result;
   }
 
+  /// <summary>
+  /// Logs why a command-line run has nothing to run, and quits with
+  /// <see cref="NothingToRunExitCode"/> if the run was asked to exit when done.
+  /// </summary>
+  public static void NothingToRun(Result result, string reason)
+  {
+    Log.Error(reason);
+    DevLog.Write(reason);
+    if (result.exitOnFinish)
+    {
+      Application.Quit(NothingToRunExitCode);
+    }
+  }
+
   private enum TestSelection
   {
     None,
@@ -147,6 +188,8 @@ internal static class CommandRunner
   public record Result
   {
     public string packageId;
+    // The loaded mod with that package id; null when no loaded mod has it.
+    public ModContentPack mod;
     public bool hideWindow;
     public bool exitOnFinish;
     public bool headless;
@@ -172,17 +215,29 @@ internal static class CommandRunner
 
     public TestFilter Filter { get; private set; }
 
+    // Why the last --test-plan or --test-list left Filter null.
+    public string FilterError { get; private set; }
+
     public void LoadTestPlan(ModContentPack mod, string name)
     {
       TestPlan = name;
       TestPlan plan = DevHarmony.GetDevTool<TestPlanManager>(mod)?.FindPlan(name);
       // Can't use null conditional, method group conversion causes compiler error.
       Filter = plan != null ? plan.Filter : null;
+      FilterError = plan != null ? null : $"{mod.PackageIdPlayerFacing} has no test plan named {name}.";
     }
 
     public void LoadTestList(string filePath)
     {
       TestListFile = filePath;
+      if (!File.Exists(filePath))
+      {
+        Filter = null;
+        FilterError = $"No test list at {filePath}.";
+        return;
+      }
+
+      FilterError = null;
       HashSet<string> names = File.ReadAllLines(filePath).ToHashSet();
       Filter = NameFilter;
       return;
