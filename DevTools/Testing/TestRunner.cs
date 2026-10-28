@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using JetBrains.Annotations;
 using RimWorld;
 using RimWorld.Planet;
@@ -185,6 +186,11 @@ public sealed class TestRunner
     // such as premature skips / failures.
     // ReSharper disable PossibleMultipleEnumeration
     var testsToRun = filter(testManager);
+    if (DevHarmony.Args is { exitOnFinish: true } args && !testsToRun.Any())
+    {
+      CommandRunner.NothingToRun(args, "No tests matched the selection.");
+      yield break;
+    }
     ResetAll(testsToRun);
     foreach ((ITestFixture fixture, List<ITestFunction> functions) in testsToRun)
     {
