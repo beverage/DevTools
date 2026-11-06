@@ -62,6 +62,11 @@ public static class Test
     cache.TryGetValue(manager)?.ResetStatuses();
   }
 
+  internal static void Forget(ITestManager manager)
+  {
+    cache.Remove(manager);
+  }
+
   public static void Cancel(string message = null)
   {
     Expect.SendSignal(Status.Canceled, "Test.Cancel", message, skipFrames: 2);
