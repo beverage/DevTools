@@ -41,13 +41,18 @@ internal class LogWatcher : IDisposable
     LogCounts[type].Add(new LogEntry(msg, stackTrace));
   }
 
+  public void VerifyAndClear()
+  {
+    VerifyLogs(LogType.Warning);
+    VerifyLogs(LogType.Error);
+    LogCounts.Clear();
+  }
+
   public void Dispose()
   {
     try
     {
-      VerifyLogs(LogType.Warning);
-      VerifyLogs(LogType.Error);
-      LogCounts.Clear();
+      VerifyAndClear();
     }
     finally
     {

@@ -283,7 +283,7 @@ public static class Test
   private sealed class TestCache
   {
     private readonly Dictionary<ITestModule, TestData> moduleData = [];
-    private readonly Dictionary<string, TestData> testGroups = [];
+    private readonly Dictionary<(TestData parent, string name), TestData> testGroups = [];
     private readonly Dictionary<ITestModule, Dictionary<ITestCase, TestData>> tests = [];
 
     public IEnumerable<ITestGroup> AssemblyGroups => moduleData.Values;
@@ -313,10 +313,10 @@ public static class Test
         Assert.IsNotNull(currentGroup);
         if (testCase.Args.Length > 0)
         {
-          if (!testGroups.TryGetValue(testCase.Name, out TestData fixtureGroup))
+          if (!testGroups.TryGetValue((currentGroup, testCase.Name), out TestData fixtureGroup))
           {
             fixtureGroup = new TestData(testCase.Name);
-            testGroups[testCase.Name] = fixtureGroup;
+            testGroups[(currentGroup, testCase.Name)] = fixtureGroup;
             currentGroup.AddChild(fixtureGroup);
           }
           fixtureGroup.AddChild(testGroup);
