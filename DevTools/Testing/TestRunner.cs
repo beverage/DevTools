@@ -212,12 +212,11 @@ public sealed class TestRunner
         if (sceneChangeFailed)
         {
           Test.Fail($"Unable to transition scene to {fixture.TestType}");
-          foreach (ITestFunction function in functions)
-          {
-            using Test.Scope fns = new(function);
-            Test.Current.Status = Status.Skipped;
-          }
+          FailTests(functions);
           Test.LogResults(fixture, functions);
+          DevLog.Flush();
+          if (ShouldStop(fixture))
+            break;
           continue;
         }
 
@@ -233,21 +232,31 @@ public sealed class TestRunner
             }
             CameraJumper.TryJump(currentMap.Center, currentMap, mode: CameraJumper.MovementMode.Cut);
           }
+          bool setUp = false;
           if (!RunPreTestActions(fixture))
           {
             Test.Fail($"Failed pre-test actions for {fixture.Name}!");
-            continue;
           }
-
-          if (!fixture.OneTimeSetUp(instance))
+          else if (!fixture.OneTimeSetUp(instance))
           {
             Test.Fail($"Failed to set up {fixture.Name}!");
-            continue;
+          }
+          else
+          {
+            setUp = true;
+            // Logs from the scene change and setup fail the fixture, not its first test.
+            fxWatcher.VerifyAndClear();
+          }
+
+          bool failedBeforeTests = Test.Current.Status is Status.Failed;
+          if (failedBeforeTests)
+          {
+            FailTests(functions);
           }
 
           foreach (ITestFunction function in functions)
           {
-            if (ShouldStop(function))
+            if (failedBeforeTests || ShouldStop(function))
               break;
 
             Assert.IsFalse(function.MissingRequiredMods());
@@ -294,10 +303,9 @@ public sealed class TestRunner
             if (ShouldStop(function))
               break;
           }
-          if (!fixture.OneTimeTearDown(instance))
+          if (setUp && !fixture.OneTimeTearDown(instance))
           {
             Test.Fail($"Failed to tear down {fixture.Name}!");
-            continue;
           }
         }
         finally
@@ -331,6 +339,27 @@ public sealed class TestRunner
     DevLog.Write($"Tests finished in {stopwatch.ElapsedMilliseconds} ms with {report}");
     testManager.OnTestRunnerEnd();
     yield break;
+
+    // The current fixture failed before running its tests, so each of them fails for its
+    // reason, and reaches the report and dotnet test like any other result.
+    void FailTests(List<ITestFunction> functions)
+    {
+      ITestGroup fixture = Test.Current;
+      foreach (ITestFunction function in functions)
+      {
+        using (new Test.Scope(function))
+        {
+          Expect.SendSignal(Status.Failed, fixture.TestContext, fixture.FailLabel,
+            fixture.FailMessage, fixture.StackTrace);
+          if (fixture.Exception != null)
+          {
+            Test.Current.Exception = fixture.Exception;
+          }
+        }
+        report.Add(function);
+        tcp?.SendResult(function);
+      }
+    }
 
     static void ResetAll(IEnumerable<(ITestFixture, List<ITestFunction>)> tests)
     {

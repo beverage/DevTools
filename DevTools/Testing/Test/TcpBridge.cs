@@ -36,7 +36,11 @@ internal class TcpBridge : IDisposable
       FullName = function.FullName,
       Status = function.Status,
       Duration = group.Duration.ElapsedMilliseconds,
-      Message = group.FailMessage,
+      Message = string.IsNullOrEmpty(group.FailMessage)
+        ? group.FailLabel
+        : string.IsNullOrEmpty(group.FailLabel)
+          ? group.FailMessage
+          : $"{group.FailLabel}{Environment.NewLine}{group.FailMessage}",
       StackTrace = group.StackTrace,
       Source = function.Module.Source
     }));
