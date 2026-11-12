@@ -48,6 +48,12 @@ internal sealed class Dialog_TestExplorer : Window
 
   protected override float Margin => 0;
 
+  internal void Rebuild()
+  {
+    Summary = null;
+    Init();
+  }
+
   private void Init()
   {
     testGroups.Clear();
@@ -130,7 +136,9 @@ internal sealed class Dialog_TestExplorer : Window
     const string RunPassedName = "Run Passed Tests";
     const string RunTillFailName = "Run Until Failure";
     const string ClearAllName = "Clear All Test Results";
+    const string ReloadName = "Reload Tests";
 
+    TestFixtureManager reloadable = testManager as TestFixtureManager;
     Rect buttonRect = (rect with { size = new Vector2(BtnSize, BtnSize) }).ContractedBy(3);
     if (Widgets.ButtonImage(buttonRect, TexButton.SpeedButtonTextures[2], Color.green,
       tooltip: RunName))
@@ -167,9 +175,22 @@ internal sealed class Dialog_TestExplorer : Window
           }),
         new(ClearAllName, () => Test.ResetAll(testManager))
       ];
+      if (reloadable != null)
+      {
+        options.Add(new FloatMenuOption(ReloadName, reloadable.ReloadTests));
+      }
       Find.WindowStack.Add(new FloatMenu(options));
 
       SoundDefOf.Click.PlayOneShotOnCamera();
+    }
+    if (reloadable != null)
+    {
+      buttonRect.x += buttonRect.width;
+      if (Widgets.ButtonImage(buttonRect, TexButton.Reload, tooltip: ReloadName))
+      {
+        SoundDefOf.Click.PlayOneShotOnCamera();
+        reloadable.ReloadTests();
+      }
     }
   }
 
