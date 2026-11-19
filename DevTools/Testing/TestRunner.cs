@@ -178,6 +178,10 @@ public sealed class TestRunner
 
         object instance = fixture.CreateInstance();
         FixtureGameSettings fxtSettings = new(instance);
+        if (currentMap != null && Find.Maps?.Contains(currentMap) != true)
+        {
+          currentMap = Find.CurrentMap ?? Find.Maps?.FirstOrFallback();
+        }
         // Scene change for test type
         bool hasSaveFile = !fixture.SaveFile.NullOrEmpty();
         bool needsRegen = fxtSettings.NeedsReload || restoreEnvironment;
@@ -388,6 +392,7 @@ public sealed class TestRunner
     Assert.IsTrue(!saveFile.NullOrEmpty());
     GameDataSaveLoader.LoadGame(saveFile);
     yield return WaitTillLoaded(ProgramState.Playing);
+    currentMap = Find.CurrentMap ?? Find.Maps?.FirstOrFallback();
   }
 
   private IEnumerator ChangeSceneRoutine(TestType testType, ITestFixture fixture, FixtureGameSettings settings)
